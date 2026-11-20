@@ -136,8 +136,9 @@ export async function launch() {
  * 開一個分頁並連上 CDP。會蒐集：例外與 console error／warning（logs）、網路請求（requests，標出 load 前後）。
  * @param {{port: number}} br
  * @param {string} url
+ * @param {{ initScript?: string }} [opts] initScript：在頁面任何腳本之前注入的原始碼（不傳則行為不變）
  */
-export async function openPage(br, url) {
+export async function openPage(br, url, { initScript } = {}) {
   const r = await fetch(`http://127.0.0.1:${br.port}/json/new?about:blank`, { method: 'PUT' });
   const target = await r.json();
   const ws = new WebSocket(target.webSocketDebuggerUrl);
@@ -190,6 +191,7 @@ export async function openPage(br, url) {
     });
   for (const d of ['Runtime', 'Page', 'Network', 'Log']) await send(d + '.enable');
   await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false });
+  if (initScript) await send('Page.addScriptToEvaluateOnNewDocument', { source: initScript });
   await send('Page.navigate', { url });
   const pg = {
     logs,

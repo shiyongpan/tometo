@@ -110,3 +110,37 @@ export function inlineScriptImports(html) {
   }
   return bad;
 }
+
+/** 只有 src/shell/clock.js 可以出現的時鐘字樣（ADR-0006），嚴格字串比對，註解裡出現也算。 */
+export const CLOCK_WORDS = ['Date.now', 'new Date', 'performance.now'];
+/** 唯一允許讀時鐘的檔案。 */
+export const CLOCK_FILE = 'src/shell/clock.js';
+
+/**
+ * 檢查時鐘字樣是否出現在 clock.js 以外的檔案。
+ * @param {string} relPath 檔案在 repo 內的相對路徑
+ * @param {string} text
+ * @returns {string[]} 違規字樣
+ */
+export function findClockViolations(relPath, text) {
+  return relPath === CLOCK_FILE ? [] : findForbidden(text, CLOCK_WORDS);
+}
+
+/** src 不可以有的除錯開關、網址參數開關、測試專用分支、innerHTML、localStorage。 */
+export const DEBUG_SWITCH_WORDS = [
+  'location.search',
+  'URLSearchParams',
+  'tometo.test',
+  'innerHTML',
+  'localStorage',
+  'sessionStorage'
+];
+
+/**
+ * 找出 src 檔案內的除錯開關字樣。
+ * @param {string} text
+ * @returns {string[]}
+ */
+export function findDebugSwitches(text) {
+  return findForbidden(text, DEBUG_SWITCH_WORDS);
+}
