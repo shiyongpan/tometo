@@ -1,0 +1,13 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>ignored-host</title>
+<link rel="icon" href="data:,">
+<script>
+  // 框架自我測試用：load 之後對 example.test（被略過）與 other.test（仍被計入）各發一次請求
+  addEventListener('load', () =>
+    setTimeout(() => {
+      fetch('http://example.test/x').catch(() => {});
+      fetch('http://other.test/y').catch(() => {});
+    }, 200)
+  );
+</script>

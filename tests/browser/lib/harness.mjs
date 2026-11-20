@@ -12,17 +12,22 @@ export const TMP = path.join(REPO, 'tests', '.tmp');
 fs.mkdirSync(TMP, { recursive: true });
 export const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-// 防毒軟體（例如 Kaspersky 的網頁防護）會把自己的腳本注入 http 頁面，並從自己的網域發請求，
-// 那不是頁面本身的請求。預設略過這些網域，並印出 NOTE 讓人看得到；可用 TOMETO_IGNORE_HOSTS（逗號分隔）覆寫。
-const IGNORE_HOSTS = (process.env.TOMETO_IGNORE_HOSTS ?? 'kaspersky-labs.com').split(',').filter(Boolean);
-const isIgnoredHost = u => {
-  try {
-    const h = new URL(u).hostname;
-    return IGNORE_HOSTS.some(x => h === x || h.endsWith('.' + x));
-  } catch {
-    return false;
-  }
-};
+// 略過外部注入請求的主機清單：預設為空（repo 內不寫死任何主機名稱）。
+// 本機環境若被其他軟體往頁面注入對外請求，可用環境變數 TOMETO_IGNORE_HOSTS（逗號分隔的主機名稱）設定；
+// 實際略過時，分頁關閉時會印出 NOTE 說明略過的主機與筆數。
+/**
+ * 解析略過清單。
+ * @param {string | undefined} value
+ * @returns {string[]}
+ */
+export function parseIgnoreHosts(value) {
+  return (value ?? '')
+    .split(',')
+    .map(x => x.trim())
+    .filter(Boolean);
+}
+/** 目前環境變數設定的略過清單（每次呼叫即時讀取）。 */
+export const getIgnoreHosts = () => parseIgnoreHosts(process.env.TOMETO_IGNORE_HOSTS);
 
 const BROWSERS = [
   process.env.CHROME,
@@ -146,7 +151,11 @@ export async function openPage(br, url) {
   const logs = [];
   /** @type {{url: string, afterLoad: boolean}[]} */
   const requests = [];
-  const ignored = new Set();
+  const ignoreHosts = getIgnoreHosts();
+  /** @type {Map<string, number>} 被略過的主機 → 筆數 */
+  const ignored = new Map();
+  /** @type {string[]} */
+  const notes = [];
   let loaded = false;
   let loadResolve = () => {};
   const loadPromise = new Promise(res => (loadResolve = res));
@@ -165,12 +174,9 @@ export async function openPage(br, url) {
     } else if (m.method === 'Log.entryAdded' && (p.entry.level === 'error' || p.entry.level === 'warning')) {
       logs.push(`log-${p.entry.level} ${p.entry.text} ${p.entry.url || ''}`.trim());
     } else if (m.method === 'Network.requestWillBeSent') {
-      if (isIgnoredHost(p.request.url)) {
-        if (!ignored.has(new URL(p.request.url).hostname)) {
-          ignored.add(new URL(p.request.url).hostname);
-          console.log('NOTE 略過外部注入的請求（防毒軟體）：' + new URL(p.request.url).hostname);
-        }
-      } else requests.push({ url: p.request.url, afterLoad: loaded });
+      const host = new URL(p.request.url).hostname;
+      if (ignoreHosts.some(x => host === x || host.endsWith('.' + x))) ignored.set(host, (ignored.get(host) ?? 0) + 1);
+      else requests.push({ url: p.request.url, afterLoad: loaded });
     } else if (m.method === 'Page.loadEventFired') {
       loaded = true;
       loadResolve();
@@ -188,6 +194,7 @@ export async function openPage(br, url) {
   const pg = {
     logs,
     requests,
+    notes,
     send,
     /** 等 load 事件（之後的請求都會標 afterLoad） */
     async waitLoad(ms = 15000) {
@@ -249,6 +256,12 @@ export async function openPage(br, url) {
       throw new Error('等待逾時：' + fn);
     },
     async close() {
+      for (const [h, n] of ignored) {
+        const line = `NOTE 略過 ${n} 筆對 ${h} 的請求（TOMETO_IGNORE_HOSTS）`;
+        notes.push(line);
+        console.log(line);
+      }
+      ignored.clear();
       try {
         ws.close();
         await fetch(`http://127.0.0.1:${br.port}/json/close/${target.id}`);
