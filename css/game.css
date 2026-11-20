@@ -1,0 +1,11 @@
+/* 占位頁的最小樣式：不顯眼、可讀 */
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  color: #555;
+  background: #fafafa;
+}
+
+#app {
+  padding: 1rem;
+}

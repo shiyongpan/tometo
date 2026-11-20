@@ -1,0 +1,8 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>late-fetch</title>
+<link rel="icon" href="data:,">
+<script>
+  // 框架自我測試用：load 之後刻意送出 fetch
+  addEventListener('load', () => setTimeout(() => fetch('ping.txt'), 200));
+</script>
